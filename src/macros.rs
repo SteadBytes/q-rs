@@ -34,7 +34,10 @@ macro_rules! function {
 macro_rules! q {
     () => {
         // FIXME:
-        $crate::q_log(file!(), function!(), line!());
+        $crate::LOGGER
+            .write()
+            .unwrap()
+            .q(file!(), function!(), line!());
     };
 }
 
