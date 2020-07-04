@@ -18,8 +18,8 @@ lazy_static! {
         Mutex::new(
             fs::OpenOptions::new()
                 .read(true)
-                .write(true)
                 .append(true)
+                .create(true)
                 .open(env::temp_dir().join("q"))
                 .unwrap(),
         )
