@@ -26,11 +26,7 @@ lazy_static! {
     };
 }
 
-// TODO: Test cases for:
-// - `q!(some_var)`
-// - `q!(expr)`
-// - Header line
-//   - Changing file/function
+// TODO: Improve log line parsing/matching
 
 macro_rules! read_log {
     ($e:expr) => {{
@@ -77,6 +73,58 @@ fn test_empty_call() {
         log_line_re.is_match(&log_line.trim()),
         format!("Log line mismatch: {:?}", log_line)
     );
+}
+
+#[test]
+fn test_literal() {
+    let output = read_log!(q!("Test message"));
+
+    let log_line_re = Regex::new(r#"(?m)^> "Test message"$"#).unwrap();
+
+    // Log output is correct
+    assert!(
+        log_line_re.is_match(&output.trim()),
+        format!("Log line mismatch: {:?}", output)
+    );
+    // q! returns value
+    assert_eq!(q!("Test message"), "Test message");
+}
+
+#[test]
+fn test_ident() {
+    let x = 1;
+    let output = read_log!(q!(x));
+
+    let log_line_re = Regex::new(r"(?m)^> x = 1$").unwrap();
+
+    // Log output is correct
+    assert!(
+        log_line_re.is_match(&output.trim()),
+        format!("Log line mismatch: {:?}", output)
+    );
+
+    // q! returns value
+    assert_eq!(q!(x), x);
+}
+
+#[test]
+fn test_expr() {
+    fn add_two(x: i32) -> i32 {
+        x + 2
+    }
+
+    let output = read_log!(q!(add_two(2)));
+
+    let log_line_re = Regex::new(r"(?m)^> add_two\(2\) = 4$").unwrap();
+
+    // Log output is correct
+    assert!(
+        log_line_re.is_match(&output.trim()),
+        format!("Log line mismatch: {:?}", output)
+    );
+
+    // q! returns expression value
+    assert_eq!(q!(add_two(2)), 4);
 }
 
 // FIXME: This test changes the header interval for the *global* logger and

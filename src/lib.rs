@@ -7,6 +7,7 @@ mod macros;
 use chrono::prelude::*;
 use chrono::Duration;
 use std::env;
+use std::fmt::Debug;
 use std::fs;
 use std::io::prelude::*;
 use std::sync::RwLock;
@@ -29,6 +30,50 @@ impl Formatter {
 
     pub fn q(&self) -> String {
         format!(">")
+    }
+
+    /// Returns a log line for a literal value, `val`.
+    ///
+    /// ```
+    /// use q::Formatter;
+    ///
+    /// let fmt = Formatter {};
+    ///
+    /// assert_eq!(
+    ///     fmt.q_literal(&String::from("Test message")),
+    ///     String::from("> \"Test message\"")
+    /// );
+    ///
+    /// assert_eq!(
+    ///     fmt.q_literal(&Some(42)),
+    ///     String::from("> Some(42)")
+    /// );
+
+    /// ```
+    pub fn q_literal<T: Debug>(&self, val: &T) -> String {
+        format!("> {:?}", val)
+    }
+
+    /// Returns a log line for an expression with string representation `expr`
+    /// and value `val`.
+    ///
+    /// ```
+    /// use q::Formatter;
+    ///
+    /// let fmt = Formatter {};
+    ///
+    /// assert_eq!(
+    ///     fmt.q_expr(&3, &String::from("my_var")),
+    ///     String::from("> my_var = 3")
+    /// );
+    ///
+    /// assert_eq!(
+    ///     fmt.q_expr(&5, &String::from("2 + 3")),
+    ///     String::from("> 2 + 3 = 5")
+    /// );
+    /// ```
+    pub fn q_expr<T: Debug>(&self, val: &T, expr: &str) -> String {
+        format!("> {} = {:?}", expr, val)
     }
 }
 
@@ -95,12 +140,55 @@ impl Logger {
         }
         self.state = LoggerState::Logged((now, loc));
     }
+
+    pub fn q_literal<T: Debug>(&mut self, val: &T, file_path: &str, func_path: &str, lineno: u32) {
+        let now = Utc::now();
+        let loc = LogLocation {
+            file_path: file_path.to_string(),
+            func_path: func_path.to_string(),
+            lineno,
+        };
+
+        let log_line = self.formatter.q_literal(val);
+
+        match self.header(now, &loc) {
+            Some(header) => write_to_log(&format!("{}\n{}", header, log_line)),
+            None => write_to_log(&log_line),
+        }
+        self.state = LoggerState::Logged((now, loc));
+    }
+
+    pub fn q_expr<T: Debug>(
+        &mut self,
+        val: &T,
+        expr: &str,
+        file_path: &str,
+        func_path: &str,
+        lineno: u32,
+    ) {
+        let now = Utc::now();
+        let loc = LogLocation {
+            file_path: file_path.to_string(),
+            func_path: func_path.to_string(),
+            lineno,
+        };
+
+        let log_line = self.formatter.q_expr(val, expr);
+
+        match self.header(now, &loc) {
+            Some(header) => write_to_log(&format!("{}\n{}", header, log_line)),
+            None => write_to_log(&log_line),
+        }
+        self.state = LoggerState::Logged((now, loc));
+    }
 }
 
 lazy_static! {
     pub static ref LOGGER: RwLock<Logger> = RwLock::new(Logger::new());
 }
 
+// TODO: De-couple `Logger` from I/O
+// TODO: Avoid opening and closing the file on every `q!` invocation - buffering?
 fn write_to_log(s: &str) {
     let mut file = fs::OpenOptions::new()
         .write(true)
@@ -270,5 +358,30 @@ mod formatter_tests {
         let formatter = Formatter {};
 
         assert_eq!(formatter.q(), ">");
+    }
+
+    #[test]
+    fn test_q_literal() {
+        let formatter = Formatter {};
+
+        assert_eq!(
+            formatter.q_literal(&String::from("Hello, world!")),
+            "> \"Hello, world!\""
+        );
+        assert_eq!(formatter.q_literal(&1), "> 1");
+    }
+
+    #[test]
+    fn test_q_expr() {
+        let formatter = Formatter {};
+
+        assert_eq!(
+            formatter.q_expr(&String::from("Hello, world!"), &String::from("my_var")),
+            "> my_var = \"Hello, world!\""
+        );
+        assert_eq!(
+            formatter.q_expr(&Some(42), &String::from("a_function(42)")),
+            "> a_function(42) = Some(42)"
+        );
     }
 }

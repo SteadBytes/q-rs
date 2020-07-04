@@ -30,6 +30,7 @@ macro_rules! function {
     }};
 }
 
+// TODO: Variadic arguments e.g. `q!("Hello", 1, foo(2))` -> `"> \"Hello\", 1, foo(2) = 3"`
 #[macro_export]
 macro_rules! q {
     () => {
@@ -39,6 +40,24 @@ macro_rules! q {
             .unwrap()
             .q(file!(), function!(), line!());
     };
+
+    ($x:literal) => {{
+        let val = $x;
+        $crate::LOGGER
+            .write()
+            .unwrap()
+            .q_literal(&val, file!(), function!(), line!());
+        val
+    }};
+
+    ($x:expr) => {{
+        let val = $x;
+        $crate::LOGGER
+            .write()
+            .unwrap()
+            .q_expr(&val, stringify!($x), file!(), function!(), line!());
+        val
+    }};
 }
 
 #[cfg(test)]
