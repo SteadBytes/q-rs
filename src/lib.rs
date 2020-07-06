@@ -91,21 +91,36 @@ enum LoggerState {
 }
 
 #[derive(Debug)]
-pub struct Logger {
+pub struct Logger<W: Write> {
     formatter: Formatter,
     state: LoggerState,
     header_interval: Duration,
+    sink: W,
 }
 
-impl Logger {
-    pub fn new() -> Logger {
+impl<W: Write> Logger<W> {
+    pub fn new(sink: W) -> Logger<W> {
         Logger {
             formatter: Formatter {},
             state: LoggerState::NotLogged,
             header_interval: Duration::seconds(2),
+            sink,
         }
     }
 
+    /// Return a header line for `loc` if a header should be included in it's
+    /// corresponding log line (see below) else `None`
+    ///
+    /// ## Header output semantics
+    ///
+    /// A log line should be preceeded by a header line IFF any of the following
+    /// conditions are met:
+    ///
+    /// - This is this first time logging with this `Logger`.
+    /// - The previous log occurred in a different module to `loc`.
+    /// - The previous log occurred in a different function to `loc`.
+    /// - The time duration between `now` and the previous log is greater than
+    ///   or equal to `self.header_interval`.
     fn header(&self, now: DateTime<Utc>, loc: &LogLocation) -> Option<String> {
         // FIXME: There is definitely a clearer way of implementing this!
         match &self.state {
@@ -125,37 +140,25 @@ impl Logger {
     }
 
     pub fn q(&mut self, file_path: &str, func_path: &str, lineno: u32) {
-        let now = Utc::now();
         let loc = LogLocation {
             file_path: file_path.to_string(),
             func_path: func_path.to_string(),
             lineno,
         };
-
         let log_line = self.formatter.q();
 
-        match self.header(now, &loc) {
-            Some(header) => write_to_log(&format!("{}\n{}", header, log_line)),
-            None => write_to_log(&log_line),
-        }
-        self.state = LoggerState::Logged((now, loc));
+        self.write_log_line(loc, log_line);
     }
 
     pub fn q_literal<T: Debug>(&mut self, val: &T, file_path: &str, func_path: &str, lineno: u32) {
-        let now = Utc::now();
         let loc = LogLocation {
             file_path: file_path.to_string(),
             func_path: func_path.to_string(),
             lineno,
         };
-
         let log_line = self.formatter.q_literal(val);
 
-        match self.header(now, &loc) {
-            Some(header) => write_to_log(&format!("{}\n{}", header, log_line)),
-            None => write_to_log(&log_line),
-        }
-        self.state = LoggerState::Logged((now, loc));
+        self.write_log_line(loc, log_line);
     }
 
     pub fn q_expr<T: Debug>(
@@ -166,43 +169,48 @@ impl Logger {
         func_path: &str,
         lineno: u32,
     ) {
-        let now = Utc::now();
         let loc = LogLocation {
             file_path: file_path.to_string(),
             func_path: func_path.to_string(),
             lineno,
         };
-
         let log_line = self.formatter.q_expr(val, expr);
 
+        self.write_log_line(loc, log_line);
+    }
+
+    /// Write `log_line` to `self.sink` using `loc` to construct a header line
+    /// if necessary (see `Logger::header` for header semantics).
+    fn write_log_line<S: AsRef<str>>(&mut self, loc: LogLocation, log_line: S) {
+        let log_line = log_line.as_ref();
+        let now = Utc::now();
+
         match self.header(now, &loc) {
-            Some(header) => write_to_log(&format!("{}\n{}", header, log_line)),
-            None => write_to_log(&log_line),
+            Some(header) => writeln!(self.sink, "{}\n{}", header, log_line),
+            None => writeln!(self.sink, "{}", log_line),
         }
+        .expect("Unable to write to log");
+
         self.state = LoggerState::Logged((now, loc));
     }
 }
 
 lazy_static! {
-    pub static ref LOGGER: RwLock<Logger> = RwLock::new(Logger::new());
-}
-
-// TODO: De-couple `Logger` from I/O
-// TODO: Avoid opening and closing the file on every `q!` invocation - buffering?
-fn write_to_log(s: &str) {
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .append(true)
-        .open(env::temp_dir().join("q"))
-        .expect("Unable to open qpath");
-
-    writeln!(file, "{}", s).expect("Unable to write to qpath");
+    pub static ref LOGGER: RwLock<Logger<fs::File>> = {
+        let file = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .append(true)
+            .open(env::temp_dir().join("q"))
+            .expect("Unable to open qpath");
+        RwLock::new(Logger::new(file))
+    };
 }
 
 // TODO: Should this be in the API? Initially implemented to facilitate reducing
 // the header interval for integration tests but perhaps it's a useful feature?
 // If so, should this take `std::time::Duration` instead of `chrono::Duration`?
+// TODO: Similar function for setting `Logger.sink`?
 pub fn set_header_interval(d: Duration) {
     LOGGER.write().unwrap().header_interval = d;
 }
@@ -211,9 +219,13 @@ pub fn set_header_interval(d: Duration) {
 mod logger_tests {
     use super::*;
 
+    fn testing_logger() -> Logger<Vec<u8>> {
+        Logger::new(vec![])
+    }
+
     #[test]
     fn test_header_returns_some_if_state_not_logged() {
-        let logger = Logger::new();
+        let logger = testing_logger();
         let now = Utc.ymd(2020, 6, 22).and_hms(20, 5, 32);
         let loc = LogLocation {
             file_path: String::from("src/lib.rs"),
@@ -239,7 +251,7 @@ mod logger_tests {
             lineno: 42,
         };
         let logger = {
-            let mut logger = Logger::new();
+            let mut logger = testing_logger();
             logger.state = LoggerState::Logged((now, prev_loc));
             logger
         };
@@ -264,7 +276,7 @@ mod logger_tests {
             lineno: 42,
         };
         let logger = {
-            let mut logger = Logger::new();
+            let mut logger = testing_logger();
             logger.state = LoggerState::Logged((now, prev_loc));
             logger
         };
@@ -290,7 +302,7 @@ mod logger_tests {
             lineno: 42,
         };
         let logger = {
-            let mut logger = Logger::new();
+            let mut logger = testing_logger();
             logger.state = LoggerState::Logged((prev_time, loc.clone()));
             logger.header_interval = header_interval;
             logger
@@ -317,7 +329,7 @@ mod logger_tests {
             lineno: 42,
         };
         let logger = {
-            let mut logger = Logger::new();
+            let mut logger = testing_logger();
             logger.state = LoggerState::Logged((prev_time, loc.clone()));
             logger.header_interval = header_interval;
             logger

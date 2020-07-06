@@ -26,6 +26,8 @@ lazy_static! {
     };
 }
 
+// TODO: Move some of these into `Logger` unit tests now that an in memory
+//       buffer can be used instead of reading /tmp/q.
 // TODO: Improve log line parsing/matching
 
 macro_rules! read_log {
