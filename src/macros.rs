@@ -30,23 +30,30 @@ macro_rules! function {
     }};
 }
 
+#[macro_export]
+macro_rules! loc {
+    () => {
+        $crate::LogLocation {
+            file_path: file!().to_string(),
+            func_path: function!().to_string(),
+            lineno: line!(),
+        }
+    };
+}
+
 // TODO: Variadic arguments e.g. `q!("Hello", 1, foo(2))` -> `"> \"Hello\", 1, foo(2) = 3"`
+
 #[macro_export]
 macro_rules! q {
+    // Note: `unwrap` is used when accessing the the global `Logger` mutex as
+    // trying to recover from lock poisoning is not suitable for this use case.
     () => {
-        // FIXME:
-        $crate::LOGGER
-            .write()
-            .unwrap()
-            .q(file!(), function!(), line!());
+        $crate::LOGGER.write().unwrap().q(loc!());
     };
 
     ($x:literal) => {{
         let val = $x;
-        $crate::LOGGER
-            .write()
-            .unwrap()
-            .q_literal(&val, file!(), function!(), line!());
+        $crate::LOGGER.write().unwrap().q_literal(&val, loc!());
         val
     }};
 
@@ -55,7 +62,7 @@ macro_rules! q {
         $crate::LOGGER
             .write()
             .unwrap()
-            .q_expr(&val, stringify!($x), file!(), function!(), line!());
+            .q_expr(&val, stringify!($x), loc!());
         val
     }};
 }
