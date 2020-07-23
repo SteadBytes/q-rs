@@ -4,12 +4,14 @@ extern crate lazy_static;
 #[macro_use]
 mod macros;
 
+pub mod logger;
+
 use chrono::prelude::*;
 use chrono::Duration;
+use logger::Logger;
 use std::env;
 use std::fmt::Debug;
 use std::fs;
-use std::io::prelude::*;
 use std::sync::RwLock;
 
 // TODO: Configurable options e.g. separator characters, line numbers
@@ -102,137 +104,6 @@ lazy_static! {
 // TODO: Similar function for setting `Logger.sink`?
 pub fn set_header_interval(d: Duration) {
     LOGGER.write().unwrap().header_interval = d;
-}
-
-#[cfg(test)]
-mod logger_tests {
-    use super::*;
-
-    fn testing_logger() -> Logger<Vec<u8>> {
-        Logger::new(vec![])
-    }
-
-    #[test]
-    fn test_header_returns_some_if_not_logged_previously() {
-        let logger = testing_logger();
-        let now = Utc.ymd(2020, 6, 22).and_hms(20, 5, 32);
-        let loc = LogLocation {
-            file_path: String::from("src/lib.rs"),
-            func_path: String::from("crate::foo::bar"),
-            lineno: 42,
-        };
-
-        // Sanity check
-        assert_eq!(logger.prev, None);
-
-        assert_eq!(
-            logger.header(now, &loc),
-            Some(String::from("[20:05:32 src/lib.rs crate::foo::bar:42]"))
-        );
-    }
-
-    #[test]
-    fn test_header_returns_some_if_prev_function_differs() {
-        let now = Utc.ymd(2020, 6, 22).and_hms(20, 5, 32);
-        let prev_loc = LogLocation {
-            file_path: String::from("src/lib.rs"),
-            func_path: String::from("crate::foo::bar"),
-            lineno: 42,
-        };
-        let logger = {
-            let mut logger = testing_logger();
-            logger.prev = Some((now, prev_loc));
-            logger
-        };
-        let loc = LogLocation {
-            file_path: String::from("src/lib.rs"),
-            func_path: String::from("crate::foo::baz"),
-            lineno: 42,
-        };
-
-        assert_eq!(
-            logger.header(now, &loc),
-            Some(String::from("[20:05:32 src/lib.rs crate::foo::baz:42]"))
-        );
-    }
-
-    #[test]
-    fn test_header_returns_some_if_prev_module_differs() {
-        let now = Utc.ymd(2020, 6, 22).and_hms(20, 5, 32);
-        let prev_loc = LogLocation {
-            file_path: String::from("src/lib.rs"),
-            func_path: String::from("crate::foo::bar"),
-            lineno: 42,
-        };
-        let logger = {
-            let mut logger = testing_logger();
-            logger.prev = Some((now, prev_loc));
-            logger
-        };
-        let loc = LogLocation {
-            file_path: String::from("src/lib.rs"),
-            func_path: String::from("crate::baz::bat"),
-            lineno: 42,
-        };
-
-        assert_eq!(
-            logger.header(now, &loc),
-            Some(String::from("[20:05:32 src/lib.rs crate::baz::bat:42]"))
-        );
-    }
-
-    #[test]
-    fn test_header_returns_some_if_header_interval_elapsed() {
-        let prev_time = Utc.ymd(2020, 6, 22).and_hms(20, 5, 32);
-        let header_interval = Duration::seconds(2);
-        let loc = LogLocation {
-            file_path: String::from("src/lib.rs"),
-            func_path: String::from("crate::foo::bar"),
-            lineno: 42,
-        };
-        let logger = {
-            let mut logger = testing_logger();
-            logger.prev = Some((prev_time, loc.clone()));
-            logger.header_interval = header_interval;
-            logger
-        };
-
-        // 3 seconds after `prev_time`
-        // > `logger.header_interval` -> should return `Some`
-        let now = Utc.ymd(2020, 6, 22).and_hms(20, 5, 35);
-
-        assert_eq!(
-            logger.header(now, &loc),
-            Some(String::from("[20:05:35 src/lib.rs crate::foo::bar:42]"))
-        );
-    }
-
-    #[test]
-    fn test_header_returns_none_if_header_interval_not_elapsed_and_prev_module_and_function_same() {
-        let prev_time = Utc.ymd(2020, 6, 22).and_hms(20, 5, 32);
-        let header_interval = Duration::seconds(2);
-        let loc = LogLocation {
-            file_path: String::from("src/lib.rs"),
-            func_path: String::from("crate::foo::bar"),
-            lineno: 42,
-        };
-        let logger = {
-            let mut logger = testing_logger();
-            logger.prev = Some((prev_time, loc.clone()));
-            // logger.prev = LoggerState::Logged((prev_time, loc.clone()));
-            logger.header_interval = header_interval;
-            logger
-        };
-
-        // 1 second after `prev_time`
-        // < `logger.header_interval` -> doesn't trigger header output
-        let now = Utc.ymd(2020, 6, 22).and_hms(20, 5, 33);
-
-        assert_eq!(
-            logger.header(now, &loc), // module/function same
-            None,
-        );
-    }
 }
 
 #[cfg(test)]
