@@ -1,43 +1,64 @@
 # q
 
-`my-project/src/main.rs`:
+Quick and dirty debugging for tired Rust programmers.
+
+## Example Usage
+
+[examples/simple.rs]
 
 ```rust
 #[macro_use]
 extern crate q;
 
 fn hello(name: &str) -> String {
-  q!(name);
-  format!("Hello, {}!", name)
+    q!(name);
+    format!("Hello, {}!", name)
 }
 
 fn main() {
-  q!()
+    // No message
+    q!();
 
-  let name = "SteadBytes";
+    // Identifier
+    let name = "SteadBytes";
+    q!(name);
 
-  q!(name);
+    // Returns expression values
+    let greeting = q!(hello(name));
+    q!(greeting);
 
-  let greeting = q!(hello(name));
-
-  q!(Some(42));
+    q!(Some(42));
 }
 ```
 
-Produces the following in `/tmp/q`:
+Running the above using `cargo run --example simple` writes the following to
+`$TMP_DIR/q` (`/tmp/q` on Linux):
 
 ```
-[07:32:45 src/main.rs:8 my_project::main::main]
-0.000s >
-0.000s > name = "SteadBytes"
-[07:32:45 src/main.rs:5 my_project::main::hello]
-0.0001s > name = "SteadBytes"
-[07:32:45 src/main.rs:14 my_project::main::main]
-0.0001s > hello(name) = "Hello, SteadBytes!"
-0.0001s > Some(42)
+[18:23:21 examples/simple.rs simple::main:11]
+>
+> name = "SteadBytes"
+[18:23:21 examples/simple.rs simple::hello:5]
+> name = "SteadBytes"
+[18:23:21 examples/simple.rs simple::main:18]
+> hello(name) = "Hello, SteadBytes!"
+> greeting = "Hello, SteadBytes!"
+> Some(42) = Some(42)
 ```
 
-A header line is logged at a regular (configurable) interval *or* if the calling
+A header line is logged at a regular (configurable) interval _or_ if the calling
 function or module has changed.
 
-Expression values are returned.
+Expression values are returned by `q` invocations.
+
+## Inspired by
+
+- [`q` for Python](https://github.com/zestyping/q)
+- [`q` for Golang](https://github.com/ryboe/q)
+
+## Why is this crate called `q-debug` and not `q`?
+
+`q` is unfortunately [taken already](https://crates.io/crates/q) (though I'm not
+sure what it is...).
+
+
