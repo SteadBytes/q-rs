@@ -1,8 +1,15 @@
-use crate::{Formatter, LogLocation};
+use crate::fmt::Formatter;
 use chrono::prelude::*;
 use chrono::Duration;
 use std::fmt::Debug;
 use std::io::prelude::*;
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct LogLocation {
+    pub file_path: String,
+    pub func_path: String,
+    pub lineno: u32,
+}
 
 #[derive(Debug)]
 pub struct Logger<W: Write> {
