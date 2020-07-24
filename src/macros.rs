@@ -37,6 +37,7 @@ macro_rules! loc {
             file_path: file!().to_string(),
             func_path: function!().to_string(),
             lineno: line!(),
+            thread_id: std::thread::current().id(),
         }
     };
 }

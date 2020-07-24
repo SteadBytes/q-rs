@@ -3,12 +3,14 @@ use chrono::prelude::*;
 use chrono::Duration;
 use std::fmt::Debug;
 use std::io::prelude::*;
+use std::thread;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct LogLocation {
     pub file_path: String,
     pub func_path: String,
     pub lineno: u32,
+    pub thread_id: thread::ThreadId,
 }
 
 #[derive(Debug)]
@@ -90,6 +92,9 @@ impl<W: Write> Logger<W> {
         self.prev = Some((now, loc));
     }
 }
+
+// TODO: Lots of repeated testing (smoke, logging and fmt) - how to resolve?
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -98,72 +103,72 @@ mod tests {
         Logger::new(vec![])
     }
 
+    macro_rules! ll {
+        ($filep: expr, $funcp:expr, $lineno: expr) => {
+            LogLocation {
+                file_path: String::from($filep),
+                func_path: String::from($funcp),
+                lineno: $lineno,
+                thread_id: thread::current().id(),
+            }
+        };
+    }
+
     #[test]
     fn test_header_returns_some_if_not_logged_previously() {
         let logger = testing_logger();
         let now = Utc.ymd(2020, 6, 22).and_hms(20, 5, 32);
-        let loc = LogLocation {
-            file_path: String::from("src/lib.rs"),
-            func_path: String::from("crate::foo::bar"),
-            lineno: 42,
-        };
+        let loc = ll!("src/lib.rs", "crate::foo::bar", 42);
 
         // Sanity check
         assert_eq!(logger.prev, None);
 
         assert_eq!(
             logger.header(now, &loc),
-            Some(String::from("[20:05:32 src/lib.rs crate::foo::bar:42]"))
+            Some(format!(
+                "[20:05:32 {:?} src/lib.rs crate::foo::bar:42]",
+                loc.thread_id
+            ))
         );
     }
 
     #[test]
     fn test_header_returns_some_if_prev_function_differs() {
         let now = Utc.ymd(2020, 6, 22).and_hms(20, 5, 32);
-        let prev_loc = LogLocation {
-            file_path: String::from("src/lib.rs"),
-            func_path: String::from("crate::foo::bar"),
-            lineno: 42,
-        };
+        let prev_loc = ll!("src/lib.rs", "crate::foo::bar", 42);
         let logger = {
             let mut logger = testing_logger();
             logger.prev = Some((now, prev_loc));
             logger
         };
-        let loc = LogLocation {
-            file_path: String::from("src/lib.rs"),
-            func_path: String::from("crate::foo::baz"),
-            lineno: 42,
-        };
 
+        let loc = ll!("src/lib.rs", "crate::foo::baz", 50);
         assert_eq!(
             logger.header(now, &loc),
-            Some(String::from("[20:05:32 src/lib.rs crate::foo::baz:42]"))
+            Some(format!(
+                "[20:05:32 {:?} src/lib.rs crate::foo::baz:50]",
+                loc.thread_id
+            ))
         );
     }
 
     #[test]
     fn test_header_returns_some_if_prev_module_differs() {
         let now = Utc.ymd(2020, 6, 22).and_hms(20, 5, 32);
-        let prev_loc = LogLocation {
-            file_path: String::from("src/lib.rs"),
-            func_path: String::from("crate::foo::bar"),
-            lineno: 42,
-        };
+        let prev_loc = ll!("src/lib.rs", "crate::foo::bar", 42);
         let logger = {
             let mut logger = testing_logger();
             logger.prev = Some((now, prev_loc));
             logger
         };
-        let loc = LogLocation {
-            file_path: String::from("src/lib.rs"),
-            func_path: String::from("crate::baz::bat"),
-            lineno: 42,
-        };
+        let loc = ll!("src/lib.rs", "crate::baz::bat", 42);
 
         assert_eq!(
             logger.header(now, &loc),
-            Some(String::from("[20:05:32 src/lib.rs crate::baz::bat:42]"))
+            Some(format!(
+                "[20:05:32 {:?} src/lib.rs crate::baz::bat:42]",
+                loc.thread_id
+            ))
         );
     }
 
@@ -171,11 +176,7 @@ mod tests {
     fn test_header_returns_some_if_header_interval_elapsed() {
         let prev_time = Utc.ymd(2020, 6, 22).and_hms(20, 5, 32);
         let header_interval = Duration::seconds(2);
-        let loc = LogLocation {
-            file_path: String::from("src/lib.rs"),
-            func_path: String::from("crate::foo::bar"),
-            lineno: 42,
-        };
+        let loc = ll!("src/lib.rs", "crate::foo::bar", 42);
         let logger = {
             let mut logger = testing_logger();
             logger.prev = Some((prev_time, loc.clone()));
@@ -189,7 +190,10 @@ mod tests {
 
         assert_eq!(
             logger.header(now, &loc),
-            Some(String::from("[20:05:35 src/lib.rs crate::foo::bar:42]"))
+            Some(format!(
+                "[20:05:35 {:?} src/lib.rs crate::foo::bar:42]",
+                loc.thread_id
+            ))
         );
     }
 
@@ -197,15 +201,10 @@ mod tests {
     fn test_header_returns_none_if_header_interval_not_elapsed_and_prev_module_and_function_same() {
         let prev_time = Utc.ymd(2020, 6, 22).and_hms(20, 5, 32);
         let header_interval = Duration::seconds(2);
-        let loc = LogLocation {
-            file_path: String::from("src/lib.rs"),
-            func_path: String::from("crate::foo::bar"),
-            lineno: 42,
-        };
+        let loc = ll!("src/lib.rs", "crate::foo::bar", 42);
         let logger = {
             let mut logger = testing_logger();
             logger.prev = Some((prev_time, loc.clone()));
-            // logger.prev = LoggerState::Logged((prev_time, loc.clone()));
             logger.header_interval = header_interval;
             logger
         };

@@ -14,7 +14,7 @@ use std::thread::sleep;
 use std::time;
 
 lazy_static! {
-    pub static ref QFILE: Mutex<fs::File> = {
+    static ref QFILE: Mutex<fs::File> = {
         Mutex::new(
             fs::OpenOptions::new()
                 .read(true)
@@ -46,48 +46,49 @@ macro_rules! read_log {
     }};
 }
 
+lazy_static! {
+    static ref HEADER_RE: Regex = Regex::new(
+        r"\[(?P<time>\d{2}:\d{2}:\d{2}) (?P<thread_id>.*) tests/smoke\.rs (?P<funcp>.*):(?P<lineno>\d+)\]"
+    )
+    .unwrap();
+
+    static ref LOG_LINE_RE: Regex = Regex::new(r">( (?P<msg>.*))?").unwrap();
+}
+
+fn check_header_line(header_line: &str, func_path: &str, lineno: u32) {
+    let caps = HEADER_RE.captures(&header_line.trim()).unwrap();
+    assert_eq!(&caps["funcp"], func_path);
+    assert_eq!(caps["lineno"].parse::<u32>().unwrap(), lineno);
+}
+
+fn check_log_line(log_line: &str, msg: &str) {
+    println!("{}", log_line);
+    let caps = LOG_LINE_RE.captures(&log_line.trim()).unwrap();
+    if msg == "" {
+        assert_eq!(caps.name("msg"), None);
+    } else {
+        assert_eq!(&caps["msg"], msg);
+    }
+}
+
+// FIXME: This test checks for a header without forcing the correct conditions
+// to ensure a header is logged - essentially it relies on being run first.
 #[test]
 fn test_empty_call() {
     let line_before_call = line!();
     let output = read_log!(q!());
-    let lines: Vec<&str> = output.lines().collect();
 
-    assert_eq!(lines.len(), 2);
-
-    let header = lines[0];
-    let log_line = lines[1];
-
-    // TODO: Use capture groups to assert on captured values
-    let header_re =
-        Regex::new(r"^\[\d{2}:\d{2}:\d{2} tests/smoke\.rs smoke::test_empty_call:(\d+)\]$")
-            .unwrap();
-    let header_captures = header_re.captures(&header.trim()).unwrap();
-
-    assert_eq!(
-        header_captures.get(1).unwrap().as_str(),
-        format!("{}", line_before_call + 1)
-    );
-
-    // TODO: Prefix log line with time elapsed since last header
-    let log_line_re = Regex::new(r"^>$").unwrap();
-
-    assert!(
-        log_line_re.is_match(&log_line.trim()),
-        format!("Log line mismatch: {:?}", log_line)
-    );
+    check_header_line(&output, "smoke::test_empty_call", line_before_call + 1);
+    check_log_line(&output, "");
 }
 
 #[test]
 fn test_literal() {
     let output = read_log!(q!("Test message"));
 
-    let log_line_re = Regex::new(r#"(?m)^> "Test message"$"#).unwrap();
-
     // Log output is correct
-    assert!(
-        log_line_re.is_match(&output.trim()),
-        format!("Log line mismatch: {:?}", output)
-    );
+    check_log_line(&output, "\"Test message\"");
+
     // q! returns value
     assert_eq!(q!("Test message"), "Test message");
 }
@@ -97,13 +98,8 @@ fn test_ident() {
     let x = 1;
     let output = read_log!(q!(x));
 
-    let log_line_re = Regex::new(r"(?m)^> x = 1$").unwrap();
-
     // Log output is correct
-    assert!(
-        log_line_re.is_match(&output.trim()),
-        format!("Log line mismatch: {:?}", output)
-    );
+    check_log_line(&output, "x = 1");
 
     // q! returns value
     assert_eq!(q!(x), x);
@@ -117,13 +113,8 @@ fn test_expr() {
 
     let output = read_log!(q!(add_two(2)));
 
-    let log_line_re = Regex::new(r"(?m)^> add_two\(2\) = 4$").unwrap();
-
     // Log output is correct
-    assert!(
-        log_line_re.is_match(&output.trim()),
-        format!("Log line mismatch: {:?}", output)
-    );
+    check_log_line(&output, "add_two(2) = 4");
 
     // q! returns expression value
     assert_eq!(q!(add_two(2)), 4);
@@ -134,11 +125,6 @@ fn test_expr() {
 // interval just for this one test?
 #[test]
 fn test_header_interval() {
-    let with_header_re =
-        Regex::new(r"^\[\d{2}:\d{2}:\d{2} tests/smoke\.rs smoke::test_header_interval:\d+\]\n>$")
-            .unwrap();
-    let without_header_re = Regex::new(r"^>$").unwrap();
-
     // Set long interval to ensure no header between first two calls
     q::set_header_interval(chrono::Duration::seconds(2));
 
@@ -154,20 +140,16 @@ fn test_header_interval() {
     let output_3 = read_log!(q!()); // Header
     let output_4 = read_log!(q!()); // No header
 
-    assert!(with_header_re.is_match(&output_1));
-    assert!(without_header_re.is_match(&output_2));
-    assert!(with_header_re.is_match(&output_3));
-    assert!(without_header_re.is_match(&output_4));
+    assert!(HEADER_RE.is_match(&output_1));
+    assert!(!HEADER_RE.is_match(&output_2));
+    assert!(HEADER_RE.is_match(&output_3));
+    assert!(!HEADER_RE.is_match(&output_4));
 }
 
 #[test]
 fn test_header_on_function_or_module_change() {
-    let with_header_re =
-        Regex::new(r"^\[\d{2}:\d{2}:\d{2} tests/smoke\.rs smoke::test_header_on_function_or_module_change(.*)?:\d+\]\n>$")
-            .unwrap();
-    let without_header_re = Regex::new(r"^>$").unwrap();
-
-    // Set long interval to ensure header is only triggered by function/module change
+    // Set long interval to ensure header is only triggered by function/module
+    // change
     q::set_header_interval(chrono::Duration::seconds(2));
 
     let output_1 = read_log!(q!()); // Header
@@ -193,14 +175,14 @@ fn test_header_on_function_or_module_change() {
     let output_7 = read_log!(q!()); // Header
     let output_8 = read_log!(q!()); // No header
 
-    assert!(with_header_re.is_match(&output_1));
-    assert!(without_header_re.is_match(&output_2));
+    assert!(HEADER_RE.is_match(&output_1));
+    assert!(!HEADER_RE.is_match(&output_2));
 
-    assert!(with_header_re.is_match(&output_3));
-    assert!(with_header_re.is_match(&output_4));
-    assert!(without_header_re.is_match(&output_5));
+    assert!(HEADER_RE.is_match(&output_3));
+    assert!(HEADER_RE.is_match(&output_4));
+    assert!(!HEADER_RE.is_match(&output_5));
 
-    assert!(with_header_re.is_match(&output_6));
-    assert!(with_header_re.is_match(&output_7));
-    assert!(without_header_re.is_match(&output_8));
+    assert!(HEADER_RE.is_match(&output_6));
+    assert!(HEADER_RE.is_match(&output_7));
+    assert!(!HEADER_RE.is_match(&output_8));
 }

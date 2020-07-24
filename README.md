@@ -4,7 +4,7 @@ Quick and dirty debugging for tired Rust programmers.
 
 ## Example Usage
 
-[examples/simple.rs]
+[`examples/simple.rs`](examples/simple.rs)
 
 ```rust
 #[macro_use]
@@ -35,12 +35,12 @@ Running the above using `cargo run --example simple` writes the following to
 `$TMP_DIR/q` (`/tmp/q` on Linux):
 
 ```
-[18:23:21 examples/simple.rs simple::main:11]
+[19:13:49 ThreadId(1) examples/simple.rs simple::main:11]
 >
 > name = "SteadBytes"
-[18:23:21 examples/simple.rs simple::hello:5]
+[19:13:49 ThreadId(1) examples/simple.rs simple::hello:5]
 > name = "SteadBytes"
-[18:23:21 examples/simple.rs simple::main:18]
+[19:13:49 ThreadId(1) examples/simple.rs simple::main:18]
 > hello(name) = "Hello, SteadBytes!"
 > greeting = "Hello, SteadBytes!"
 > Some(42) = Some(42)

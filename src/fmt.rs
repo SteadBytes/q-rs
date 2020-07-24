@@ -10,8 +10,9 @@ pub struct Formatter {}
 impl Formatter {
     pub fn header(&self, now: &DateTime<Utc>, log_location: &LogLocation) -> String {
         format!(
-            "[{} {} {}:{}]",
+            "[{} {:?} {} {}:{}]",
             now.time().format("%H:%M:%S").to_string(),
+            log_location.thread_id,
             log_location.file_path,
             log_location.func_path,
             log_location.lineno
@@ -69,19 +70,30 @@ impl Formatter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::thread;
+
+    macro_rules! ll {
+        ($filep: expr, $funcp:expr, $lineno: expr) => {
+            (
+                LogLocation {
+                    file_path: String::from($filep),
+                    func_path: String::from($funcp),
+                    lineno: $lineno,
+                    thread_id: thread::current().id(),
+                },
+                thread::current().id(),
+            )
+        };
+    }
 
     #[test]
     fn test_header() {
         let formatter = Formatter {};
-        let loc = LogLocation {
-            file_path: String::from("src/lib.rs"),
-            func_path: String::from("q::tests::test_q"),
-            lineno: 42,
-        };
+        let (loc, tid) = ll!("src/lib.rs", "q::tests::test_q", 42);
 
         assert_eq!(
             formatter.header(&Utc.ymd(2020, 6, 22).and_hms(20, 5, 32), &loc),
-            "[20:05:32 src/lib.rs q::tests::test_q:42]"
+            format!("[20:05:32 {:?} src/lib.rs q::tests::test_q:42]", tid)
         );
     }
 
@@ -91,7 +103,7 @@ mod tests {
 
         assert_eq!(formatter.q(), ">");
     }
-
+    //
     #[test]
     fn test_q_literal() {
         let formatter = Formatter {};
