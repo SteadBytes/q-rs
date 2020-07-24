@@ -1,5 +1,7 @@
 # q
 
+[![Crates.io](https://img.shields.io/crates/v/q-debug)](https://crates.io/crates/q-debug)
+
 Quick and dirty debugging for tired Rust programmers.
 
 ## Example Usage
