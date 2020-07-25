@@ -2,7 +2,7 @@
 extern crate lazy_static;
 
 #[macro_use]
-extern crate q;
+extern crate q_debug;
 
 use chrono;
 use regex::Regex;
@@ -126,13 +126,13 @@ fn test_expr() {
 #[test]
 fn test_header_interval() {
     // Set long interval to ensure no header between first two calls
-    q::set_header_interval(chrono::Duration::seconds(2));
+    q_debug::set_header_interval(chrono::Duration::seconds(2));
 
     let output_1 = read_log!(q!()); // Header
     let output_2 = read_log!(q!()); // No header
 
     // Set short interval to trigger header output w/out making the test too slow
-    q::set_header_interval(chrono::Duration::milliseconds(200));
+    q_debug::set_header_interval(chrono::Duration::milliseconds(200));
 
     // Sleep for > header interval and call again to trigger header output
     sleep(time::Duration::from_millis(250));
@@ -150,7 +150,7 @@ fn test_header_interval() {
 fn test_header_on_function_or_module_change() {
     // Set long interval to ensure header is only triggered by function/module
     // change
-    q::set_header_interval(chrono::Duration::seconds(2));
+    q_debug::set_header_interval(chrono::Duration::seconds(2));
 
     let output_1 = read_log!(q!()); // Header
     let output_2 = read_log!(q!()); // No header

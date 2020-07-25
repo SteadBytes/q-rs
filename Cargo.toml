@@ -1,7 +1,9 @@
 [package]
 name = "q-debug"
-version = "0.1.0"
+version = "0.1.1"
 description = "Quick and dirty debugging for tired Rust programmers"
+categories = ["development-tools::debugging"]
+keywords = ["logging", "debugging"]
 authors = ["Ben Steadman <steadmanben1@gmail.com>"]
 homepage = "https://github.com/SteadBytes/q-rs"
 license = "MIT"

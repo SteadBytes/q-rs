@@ -26,7 +26,7 @@ impl Formatter {
     /// Returns a log line for a literal value, `val`.
     ///
     /// ```
-    /// use q::fmt::Formatter;
+    /// use q_debug::fmt::Formatter;
     ///
     /// let fmt = Formatter {};
     ///
@@ -48,7 +48,7 @@ impl Formatter {
     /// and value `val`.
     ///
     /// ```
-    /// use q::fmt::Formatter;
+    /// use q_debug::fmt::Formatter;
     ///
     /// let fmt = Formatter {};
     ///
@@ -89,11 +89,11 @@ mod tests {
     #[test]
     fn test_header() {
         let formatter = Formatter {};
-        let (loc, tid) = ll!("src/lib.rs", "q::tests::test_q", 42);
+        let (loc, tid) = ll!("src/lib.rs", "q_debug::tests::test_q", 42);
 
         assert_eq!(
             formatter.header(&Utc.ymd(2020, 6, 22).and_hms(20, 5, 32), &loc),
-            format!("[20:05:32 {:?} src/lib.rs q::tests::test_q:42]", tid)
+            format!("[20:05:32 {:?} src/lib.rs q_debug::tests::test_q:42]", tid)
         );
     }
 

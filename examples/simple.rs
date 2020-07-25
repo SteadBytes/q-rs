@@ -1,5 +1,5 @@
 #[macro_use]
-extern crate q;
+extern crate q_debug;
 
 fn hello(name: &str) -> String {
     q!(name);

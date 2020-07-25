@@ -73,7 +73,7 @@ mod tests {
 
     #[test]
     fn test_function() {
-        assert_eq!(function!(), "q::macros::tests::test_function");
+        assert_eq!(function!(), "q_debug::macros::tests::test_function");
 
         struct Foo {
             bar: String,
@@ -87,6 +87,9 @@ mod tests {
             }
         }
 
-        assert_eq!(Foo::new().bar, "q::macros::tests::test_function::Foo::new");
+        assert_eq!(
+            Foo::new().bar,
+            "q_debug::macros::tests::test_function::Foo::new"
+        );
     }
 }
